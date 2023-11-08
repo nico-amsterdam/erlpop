@@ -1,4 +1,6 @@
-erlpop
+erlpop 
+[![Hex Version](https://img.shields.io/hexpm/v/pop3client.svg "Hex version")](https://hex.pm/packages/pop3client)
+[![Apache 2.0 License](https://img.shields.io/hexpm/l/pop3client.svg "Apache 2.0 license")](https://hex.pm/packages/pop3client)
 ============
 
 POP3 client library for Erlang. It is derived from the original "epop" Erlang package which includes both a POP server and client.
