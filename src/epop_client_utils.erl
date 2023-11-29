@@ -144,19 +144,19 @@ rml(1,S,[H|T],Mline,Data,Type)              -> rml(1,S,T,[H|Mline],Data,Type);  
 %% CR accepted
 rml(2,S,[?LF|T],Mline,Data,Type)            -> rml(3,S,T,[?LF|Mline],Data,Type);     % goto next state
 rml(2,S,[?CR|T],Mline,Data,Type)            -> rml(2,S,T,[?CR|Mline],Data,Type);     % stay
-rml(2,S,[H|T],Mline,Data,Type)              -> rml(1,S,[H|T],Mline,Data,Type);           % continue
+rml(2,S,[H|T],Mline,Data,Type)              -> rml(1,S,[H|T],Mline,Data,Type);       % continue
 
 %% CR + LF accepted
 rml(3,S,[$.|T],Mline,Data,Type)             -> rml(4,S,T, Mline,Data,Type);          % remove dot, goto next state
-rml(3,S,[H|T],Mline,Data,Type)              -> rml(0,S,[H|T], Mline,Data,Type);          % accept line & continue
+rml(3,S,[H|T],Mline,Data,Type)              -> rml(0,S,[H|T], Mline,Data,Type);      % accept line & continue
 
 %% CR + LF + . accepted
 rml(4,S,[?CR|T],Mline,Data,Type)            -> rml(5,S,T,[?CR|Mline],Data,Type);     % goto next state
-rml(4,S,[H|T],Mline,Data,Type)              -> rml(0,S,[H|T],Mline,Data,Type);           % accept line & continue
+rml(4,S,[H|T],Mline,Data,Type)              -> rml(0,S,[H|T],Mline,Data,Type);       % accept line & continue
 
 %% CR + LF + . + CR accepted
 rml(5,S,[?LF|T],[?CR|Mline],Data,Type)      -> rml(6,S,T, Mline,Data,Type);          % remove CR + LF, goto next state
-rml(5,S,[H|T],[?CR|Mline],Data,Type)        -> rml(0,S,[?CR,H|T],Mline,Data,Type);     % CR back in input, accept line & continue
+rml(5,S,[H|T],[?CR|Mline],Data,Type)        -> rml(0,S,[?CR,H|T],Mline,Data,Type);   % CR back in input, accept line & continue
 
 %% CR + LF + . + CR + LF accepted, terminate reading
 rml(6,S,T, [?LF,?CR|Mline],Data,stream_lines) -> {lists:reverse(Mline),{halted,S, T, Data}};  %% return last line without CR + LF
@@ -201,8 +201,8 @@ recv(S) ->
 
 recv_proto(S) ->
     case S#sk.ssl of
-        true  ->     ?ssl_api:recv(S#sk.sockfd,0);
-        false -> ?gen_tcp_api:recv(S#sk.sockfd,0)
+        false -> ?gen_tcp_api:recv(S#sk.sockfd,0);
+        _     -> ?ssl_api:recv(S#sk.sockfd,0)
     end.
 
 %% -----------------------------------------------

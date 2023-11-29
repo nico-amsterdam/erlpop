@@ -14,6 +14,9 @@ epop author: [*Torbjörn Törnkvist*](https://web.archive.org/web/19990202132504
 Note that the proposed standards [RFC 2449](https://tools.ietf.org/html/rfc2449) (Pipelining), [RFC 1734/5034](https://tools.ietf.org/html/rfc1734) (AUTH), [RFC 2595](https://tools.ietf.org/html/rfc2595) (STLS), [RFC 1082](https://tools.ietf.org/html/rfc1082) (XTND) are NOT supported.
 
 ### Changes ###
+    2023-11-29 Nico Hoogervorst  - v1.4, Erlang / OTP 26 upgrade. Pass on cacerts to ssl:connect. 
+                                   'ssl' parameter can now be false, true, list with ssl:connect options, or
+                                   a ssl:connect compatible function. A cacertfile can be passed in the ssl list.
     2019-05-21 Nico Hoogervorst  - v1.3.1, Replaced obsolete functions; string:tokens, string:str, string:substr, string:cspan.    
     2019-01-26 Nico Hoogervorst  - v1.3, added line-by-line/streaming interface. Added NOOP. Stricter byte-stuffing. eunit tests.
     2018-11-09 Nico Hoogervorst  - v1.2, case-insensitive header lookup. Added erlpop as package 'pop3client' in hex.pm

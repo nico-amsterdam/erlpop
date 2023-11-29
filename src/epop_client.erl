@@ -82,7 +82,7 @@ do_accept(Lsock,Passwd,Options) ->
 do_accept_proto(S,Lsock) ->
     case S#sk.ssl of
         false -> ?gen_tcp_api:accept(Lsock);
-        true  -> ?ssl_api:transport_accept(Lsock)
+            _ -> ?ssl_api:transport_accept(Lsock)
     end.
 
 parse_notification(S,Passwd) ->
@@ -128,17 +128,54 @@ do_connect(User,Passwd,Options) when is_list(User), is_list(Passwd), is_list(Opt
         _         -> {error,connect_failed}
     end.
 
+do_secure_connect(S, StandardOpts) ->
+    ok = ?ssl_api:start(),
+    % since OTP-26:
+    % - verify is verify_peer per default (see OTP-18455)
+    % - fail_if_no_peer_cert is true per default (see OTP-18567)
+    OtpRelease = list_to_integer(erlang:system_info(otp_release)),
+    Opts = StandardOpts ++ [{depth, 10}, {server_name_indication, S#sk.addr}] ++ 
+        case OtpRelease of
+            25 -> [{'verify', 'verify_peer'}, {fail_if_no_peer_cert, true}];
+            _ -> []
+        end,
+    SslArg = S#sk.ssl,
+    if
+        is_function(SslArg) ->
+            % call the function like it is the 
+            SslArg(S#sk.addr, S#sk.port, Opts);
+        is_list(SslArg) ->
+            % SslArg can override Opts options with it's own settings. Deduplicate options:
+            OptsMinusSslArg = Opts -- [{X1, X2} || {X1, X2} <- Opts, {Y1, _} <- SslArg, X1 =:= Y1],
+            SslConnectOpts = OptsMinusSslArg ++ SslArg,
+            % if cacerts and cacertfile are not specified, and verify is not verify_none, add cacerts with :public_key.cacerts_get() value.
+            CacertsIfNeeded = case 
+                length(
+                    [Name || {Name, Value} <- SslConnectOpts, 
+                    (Name =:= cacerts) or 
+                    (Name =:= cacertfile) or 
+                    ((Name =:= verify) and (Value =:= verify_none))]
+                ) of 
+                0 -> [{cacerts, public_key:cacerts_get()}]; 
+                _ -> [] 
+            end,
+            ?ssl_api:connect(S#sk.addr, S#sk.port, SslConnectOpts ++ CacertsIfNeeded); 
+        OtpRelease =< 24 -> 
+            ?ssl_api:connect(S#sk.addr, S#sk.port, StandardOpts);
+        true ->
+            % ssl is not false, not a function and not a list, on OTP 25 or newer:
+            ?ssl_api:connect(S#sk.addr, S#sk.port, Opts ++ [{cacerts, public_key:cacerts_get()}])
+    end.
+
 do_connect_proto(S) ->
+    StandardOpts = [{packet,raw}, {reuseaddr,true}, {active,false}],
     case S#sk.ssl of
         false ->
             %% default POP3
-            Opts = [{packet,raw}, {reuseaddr,true}, {active,false}],
-            ?gen_tcp_api:connect(S#sk.addr, S#sk.port, Opts);
-        true ->
-            %% handle POP3 over SSL
-            ok = ?ssl_api:start(),
-            Opts = [{packet,raw}, {reuseaddr,true}, {active,false}],
-            ?ssl_api:connect(S#sk.addr, S#sk.port, Opts)
+            ?gen_tcp_api:connect(S#sk.addr, S#sk.port, StandardOpts);
+        _ ->
+            %% handle POP3 over SSL/TLS
+            do_secure_connect(S, StandardOpts)
     end.
 
 %% -----------------------------------------------
@@ -147,11 +184,11 @@ do_connect_proto(S) ->
 
 get_greeting(S,Passwd) ->
     case recv_sl(S) of
-            {[$+,$O,$K|T],_} ->
-                answer_greeting(S,Passwd,T);
-            {[$-,$E,$R,$R|T],_} ->
-                if_snoop(S,sender,"-ERR" ++ T),
-                {error,T}
+        {[$+,$O,$K|T],_} ->
+            answer_greeting(S,Passwd,T);
+        {[$-,$E,$R,$R|T],_} ->
+            if_snoop(S,sender,"-ERR" ++ T),
+            {error,T}
     end.
 
 answer_greeting(S,Passwd,T) when S#sk.apop==false ->
@@ -415,6 +452,12 @@ top(S,MsgNum,Lines) when is_integer(MsgNum), is_integer(Lines) ->
     if_snoop(S,client,Msg),
     get_retrieve(S).
 
+
+%% ------------------------
+%% @doc
+%% Get list of capabilities
+%% @end -------------------
+
 capa(S) ->
     Msg = "CAPA",
     ok = deliver(S,Msg),
@@ -539,8 +582,8 @@ quit(S) ->
               Else   -> Else
           end,
     case S#sk.ssl of
-        true -> ?ssl_api:close(S#sk.sockfd);
-        false -> ?gen_tcp_api:close(S#sk.sockfd)
+        false -> ?gen_tcp_api:close(S#sk.sockfd);
+            _ -> ?ssl_api:close(S#sk.sockfd)
     end,
     Res.
 
@@ -578,8 +621,8 @@ get_ok(S) ->
 
 deliver(S,Msg) ->
     case S#sk.ssl of
-        true -> ?ssl_api:send(S#sk.sockfd, Msg ++ "\r\n");
-        false -> ?gen_tcp_api:send(S#sk.sockfd, Msg ++ "\r\n")
+        false -> ?gen_tcp_api:send(S#sk.sockfd, Msg ++ "\r\n");
+            _ -> ?ssl_api:send(S#sk.sockfd, Msg ++ "\r\n")
     end.
 
 %% ---------------------------------------
@@ -624,6 +667,8 @@ set_options([apop|T],S) ->
     set_options(T,S#sk{apop=true});
 set_options([upass|T],S) ->
     set_options(T,S#sk{apop=false});
+set_options([{ssl,Ssl}|T], S) ->
+    set_options(T,S#sk{ssl=Ssl});
 set_options([ssl|T],S) ->
     set_options(T,S#sk{ssl=true});
 set_options([{addr,Addr}|T], S) ->

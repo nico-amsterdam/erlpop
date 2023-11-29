@@ -60,9 +60,11 @@ option_types() ->
          "port"       => integer,
          "max"        => integer,
          "no_ssl"     => boolean,
+         "no_verify"  => boolean,
          "delete"     => boolean,
          "help"       => boolean,
-         "output"     => string
+         "output"     => string,
+         "cacertfile" => string
      }.
 
 main(Args) ->
@@ -81,7 +83,7 @@ main(Args) ->
                                     run(NewOptions)
                                  catch
                                     exit:Reason -> 
-                                       io:format(standard_error,"Error: ~s~n", [Reason]),
+                                       io:format(standard_error,"Error: ~s~n", [lists:flatten(io_lib:format("~p",[Reason]))]),
                                        halt(3)
                                  end
                   end
@@ -101,26 +103,29 @@ ask_required_arguments(Options) ->
 
 usage() ->
     io:format("" 
-     ++ "usage: pop3mail_downloader [--username=USERNAME]\n"
+     ++ "usage: pop3client_downloader [--username=USERNAME]\n"
      ++ "       [--password=PASSWORD] [--server=SERVER] [--port=PORT]\n"
+     ++ "       [--output=DIRECTORY] [--cacertfile=FILE] [--no_verify]\n"
      ++ "       [--max=NUMBER_OF_EMAILS] [--delete] [--no_ssl] [--help]\n"
      ++ "Read emails from the inbox and save them as .eml files on disk\n"
      ++ "in the 'inbox' subdirectory.\n"
      ++ "\n"
-     ++ "-           prompt for input. Use after an option. For example: --password -\n"
-     ++ "--password  account password.\n"
-     ++ "--delete    delete email after downloading. Default: false\n"
-     ++ "            Notice that Gmail ignores the delete\n"
-     ++ "            and instead uses the Gmail account settings.\n"
-     ++ "--no_ssl    Use plain tcp istead of ssl/tls. Traffic will be unsecure.\n"
-     ++ "--help      show this information.\n"
-     ++ "--max       maximum number of emails to download. Default: unlimited\n"
-     ++ "--output    output directory. Default: inbox\n"
-     ++ "--port      pop3 server port. Default: 995\n"
-     ++ "--server    pop3 mailserver address. Default: pop.gmail.com\n"
-     ++ "--username  Username. email account name.  Gmail users can precede the name with\n"
-     ++ "            'recent:' to get the last 30 days mail, even if it has\n"
-     ++ "             already been downloaded elsewhere.\n"),
+     ++ "-             prompt for input. Use after an option. For example: --password -\n"
+     ++ "--cacertfile  file with CA certificates to verify the server.\n"
+     ++ "--delete      delete email after downloading. Default: false\n"
+     ++ "              Notice that Gmail ignores the delete\n"
+     ++ "              and instead uses the Gmail account settings.\n"
+     ++ "--help        show this information.\n"
+     ++ "--max         maximum number of emails to download. Default: unlimited\n"
+     ++ "--no_ssl      Use plain tcp instead of ssl/tls. Traffic will be unsecure.\n"
+     ++ "--no_verify   Ignores invalid and self-signed certificates errors.\n"
+     ++ "--output      output directory. Default: inbox\n"
+     ++ "--password    account password.\n"
+     ++ "--port        pop3 server port. Default: 995\n"
+     ++ "--server      pop3 mailserver address. Default: pop.gmail.com\n"
+     ++ "--username    Username. email account name. Gmail users can precede the name with\n"
+     ++ "              'recent:' to get the last 30 days mail, even if it has\n"
+     ++ "              already been downloaded elsewhere.\n"),
     halt(1).
 
 %%%   Convert date from email header to a standard date format: YYYYMMDD_HHMMSS
@@ -227,11 +232,18 @@ run(Options) ->
   length(Password) > 0 orelse exit("Non-empty password is required."),
   {ok, Server}   = maps:find(server, Options),
   {ok, Port}     = maps:find(port, Options),
+  CacertsOptions = case maps:find(cacertfile, Options) of
+      {ok, CacertFile} -> [{cacertfile, CacertFile}];
+      _ -> []
+  end,
   SslOptions = case maps:find(no_ssl, Options) of
       {ok, true} -> [];
-      _ -> [ssl]
+      _ -> case maps:find(no_verify, Options) of
+               {ok, true} -> [{ssl, [{verify, verify_none}, {fail_if_no_peer_cert, false}] ++ CacertsOptions}];
+               _ -> [{ssl, CacertsOptions}]
+           end
   end,
-  {ok, Delete}     = maps:find(delete, Options),
+  {ok, Delete}      = maps:find(delete, Options),
   ConnectionOptions = SslOptions ++ [{addr, Server}, {port, Port}, {user, Username}],
   {ConnectStatus, ConnectResponse} = epop_client:connect(Username, Password, ConnectionOptions),
   ConnectStatus == ok orelse exit(ConnectResponse),
