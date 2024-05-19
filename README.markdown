@@ -79,9 +79,9 @@ Note that the proposed standards [RFC 2449](https://tools.ietf.org/html/rfc2449)
     Specially note how easy it is to create an Elixir stream
 
     iex -S mix
-    iex(1)> user = 'yourname@gmail.com'
-    iex(2)> {ok, connection} = :epop_client.connect(user, 'yourpassword', 
-    ...(2)>                                     [ {:addr, 'pop.gmail.com'}, {:port, 995}, {:user, user}, :ssl] )
+    iex(1)> user = ~c"yourname@gmail.com"
+    iex(2)> {ok, connection} = :epop_client.connect(user, ~c"yourpassword", 
+    ...(2)>                                     [ {:addr, ~c"pop.gmail.com"}, {:port, 995}, {:user, user}, :ssl] )
     iex(3)> {:ok, {total_count, total_size}} = :epop_client.stat(connection)
     iex(4)> # read headers and 20 lines of the body of the first email
     iex(5)> {:ok, mail_content} = :epop_client.top(connection, 1, 20)
